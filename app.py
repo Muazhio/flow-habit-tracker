@@ -295,10 +295,10 @@ def add_habit(name, icon, color):
     st.session_state.next_id += 1
 
 
-def toggle_habit(habit_id):
+def mark_done(habit_id):
     for habit in st.session_state.habits:
         if habit["id"] == habit_id:
-            habit["done"] = not habit["done"]
+            habit["done"] = True
             break
 
 
@@ -361,15 +361,12 @@ def render_habit_row(habit, show_delete=False):
         )
 
     with actions:
-        label = "Undo" if habit["done"] else "Done"
-        if st.button(label, key=f"toggle_{habit['id']}", use_container_width=True):
-            toggle_habit(habit["id"])
-            st.rerun()
-        if show_delete and st.button(
-            "Delete", key=f"delete_{habit['id']}", use_container_width=True
-        ):
-            delete_habit(habit["id"])
-            st.rerun()
+     if not habit["done"]:
+        if st.button("Done", key=f"done_{habit['id']}", use_container_width=True):
+        mark_done(habit["id"])
+        st.rerun()
+    else:
+    st.write("Completed")
 
 
 def render_today():
