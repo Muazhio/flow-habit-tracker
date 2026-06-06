@@ -22,6 +22,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+DATA_FILE = "flow_data.json"
+
+
+def load_data():
+    """Read saved habits from the file, or return None if there's nothing saved."""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def save_data():
+    """Write the current habits and note to the file so they survive a refresh."""
+    data = {
+        "habits": st.session_state.habits,
+        "next_id": st.session_state.next_id,
+        "note": st.session_state.note,
+    }
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 DATA_FILE = "flow_data.json"
 
