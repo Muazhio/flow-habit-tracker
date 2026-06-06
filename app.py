@@ -4,6 +4,7 @@ Flow Streamlit app.
 Run with:
     streamlit run app.py
 """
+
 import json
 import os
 from copy import deepcopy
@@ -41,6 +42,29 @@ def save_data():
     }
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+DATA_FILE = "flow_data.json"
+
+
+def load_data():
+    """Read saved data from the file, or return None if nothing is saved yet."""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def save_data():
+    """Write habits, note, and today's date so data survives and we can detect a new day."""
+    data = {
+        "habits": st.session_state.habits,
+        "next_id": st.session_state.next_id,
+        "note": st.session_state.note,
+        "last_active": date.today().isoformat(),
+    }
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
 
 HABIT_ICONS = ["💧", "💪", "📚", "🧘", "🌱", "☀️", "🎯", "✍️", "🥗", "😴"]
 HABIT_COLORS = ["#7c5cff", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
@@ -294,10 +318,19 @@ def init_state():
             st.session_state.habits = data["habits"]
             st.session_state.next_id = data["next_id"]
             st.session_state.note = data["note"]
+
+            # If the saved data is from an earlier day, clear all checkmarks
+            # so today starts fresh.
+            today = date.today().isoformat()
+            if data.get("last_active") != today:
+                for habit in st.session_state.habits:
+                    habit["done"] = False
+                save_data()
         else:
             st.session_state.habits = seed_habits()
             st.session_state.next_id = len(st.session_state.habits) + 1
             st.session_state.note = ""
+            save_data()
 
 
 def completion_stats():
