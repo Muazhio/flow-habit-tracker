@@ -4,7 +4,8 @@ Flow Streamlit app.
 Run with:
     streamlit run app.py
 """
-
+import json
+import os
 from copy import deepcopy
 from datetime import date
 
@@ -20,6 +21,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+DATA_FILE = "flow_data.json"
+
+
+def load_data():
+    """Read saved habits from the file, or return None if there's nothing saved."""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def save_data():
+    """Write the current habits and note to the file so they survive a refresh."""
+    data = {
+        "habits": st.session_state.habits,
+        "next_id": st.session_state.next_id,
+        "note": st.session_state.note,
+    }
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 HABIT_ICONS = ["💧", "💪", "📚", "🧘", "🌱", "☀️", "🎯", "✍️", "🥗", "😴"]
 HABIT_COLORS = ["#7c5cff", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
@@ -268,11 +289,15 @@ def seed_habits():
 
 def init_state():
     if "habits" not in st.session_state:
-        st.session_state.habits = seed_habits()
-    if "next_id" not in st.session_state:
-        st.session_state.next_id = len(st.session_state.habits) + 1
-    if "note" not in st.session_state:
-        st.session_state.note = ""
+        data = load_data()
+        if data:
+            st.session_state.habits = data["habits"]
+            st.session_state.next_id = data["next_id"]
+            st.session_state.note = data["note"]
+        else:
+            st.session_state.habits = seed_habits()
+            st.session_state.next_id = len(st.session_state.habits) + 1
+            st.session_state.note = ""
 
 
 def completion_stats():
@@ -293,6 +318,7 @@ def add_habit(name, icon, color):
         }
     )
     st.session_state.next_id += 1
+    save_data()        
 
 
 def toggle_habit(habit_id):
@@ -300,12 +326,14 @@ def toggle_habit(habit_id):
         if habit["id"] == habit_id:
             habit["done"] = not habit["done"]
             break
+    save_data()        
 
 
 def delete_habit(habit_id):
     st.session_state.habits = [
         habit for habit in st.session_state.habits if habit["id"] != habit_id
     ]
+    save_data()        
 
 
 def render_sidebar():
