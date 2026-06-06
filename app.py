@@ -8,7 +8,7 @@ Run with:
 import json
 import os
 from copy import deepcopy
-from datetime import date
+from datetime import date, timedelta
 
 import streamlit as st
 
@@ -22,26 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-DATA_FILE = "flow_data.json"
 
-
-def load_data():
-    """Read saved habits from the file, or return None if there's nothing saved."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
-
-
-def save_data():
-    """Write the current habits and note to the file so they survive a refresh."""
-    data = {
-        "habits": st.session_state.habits,
-        "next_id": st.session_state.next_id,
-        "note": st.session_state.note,
-    }
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
 
 DATA_FILE = "flow_data.json"
 
@@ -306,6 +287,8 @@ def seed_habits():
                 "icon": habit["icon"],
                 "done": habit["done"],
                 "color": HABIT_COLORS[index % len(HABIT_COLORS)],
+                "streak": 0,
+                "last_done": None,
             }
         )
     return habits
@@ -319,12 +302,15 @@ def init_state():
             st.session_state.next_id = data["next_id"]
             st.session_state.note = data["note"]
 
-            # If the saved data is from an earlier day, clear all checkmarks
-            # so today starts fresh.
+            # New day: clear today's checkmarks. Keep a streak only if the habit
+            # was done yesterday; otherwise the chain is broken, so reset it.
             today = date.today().isoformat()
+            yesterday = (date.today() - timedelta(days=1)).isoformat()
             if data.get("last_active") != today:
                 for habit in st.session_state.habits:
                     habit["done"] = False
+                    if habit.get("last_done") != yesterday:
+                        habit["streak"] = 0
                 save_data()
         else:
             st.session_state.habits = seed_habits()
@@ -348,18 +334,34 @@ def add_habit(name, icon, color):
             "icon": icon,
             "done": False,
             "color": color,
+            "streak": 0,
+            "last_done": None,
         }
     )
     st.session_state.next_id += 1
-    save_data()        
+    save_data()       
 
 
 def toggle_habit(habit_id):
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
     for habit in st.session_state.habits:
         if habit["id"] == habit_id:
-            habit["done"] = not habit["done"]
+            if not habit["done"]:
+                # Marking it done: extend the streak if done yesterday, else start fresh.
+                habit["done"] = True
+                if habit.get("last_done") == yesterday:
+                    habit["streak"] = habit.get("streak", 0) + 1
+                else:
+                    habit["streak"] = 1
+                habit["last_done"] = today
+            else:
+                # Undoing today's check: step the streak back down.
+                habit["done"] = False
+                habit["streak"] = max(0, habit.get("streak", 0) - 1)
+                habit["last_done"] = yesterday if habit["streak"] > 0 else None
             break
-    save_data()        
+    save_data()    
 
 
 def delete_habit(habit_id):
@@ -403,6 +405,9 @@ def render_metric(label, value):
 def render_habit_row(habit, show_delete=False):
     state_class = "complete" if habit["done"] else ""
     state_text = "Complete" if habit["done"] else "Waiting for today"
+    streak = habit.get("streak", 0)
+    if streak > 0:
+        state_text += f"  ·  🔥 {streak} day streak"
     row, actions = st.columns([5, 2], vertical_alignment="center")
 
     with row:
