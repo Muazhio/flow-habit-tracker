@@ -42,6 +42,7 @@ def save_data():
         "next_id": st.session_state.next_id,
         "note": st.session_state.note,
         "last_active": date.today().isoformat(),
+        "history": st.session_state.history,
     }
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
@@ -301,6 +302,7 @@ def init_state():
             st.session_state.habits = data["habits"]
             st.session_state.next_id = data["next_id"]
             st.session_state.note = data["note"]
+            st.session_state.history = data.get("history", {})
 
             # New day: clear today's checkmarks. Keep a streak only if the habit
             # was done yesterday; otherwise the chain is broken, so reset it.
@@ -316,6 +318,7 @@ def init_state():
             st.session_state.habits = seed_habits()
             st.session_state.next_id = len(st.session_state.habits) + 1
             st.session_state.note = ""
+            st.session_state.history = {}
             save_data()
 
 
@@ -324,6 +327,17 @@ def completion_stats():
     done = sum(1 for habit in st.session_state.habits if habit["done"])
     percent = done / total if total else 0
     return total, done, percent
+
+def update_history():
+    """Save how many habits are completed today."""
+    today = date.today().isoformat()
+    completed = 0
+
+    for habit in st.session_state.habits:
+        if habit["done"]:
+            completed += 1
+
+    st.session_state.history[today] = completed
 
 
 def add_habit(name, icon, color):
@@ -361,6 +375,7 @@ def toggle_habit(habit_id):
                 habit["streak"] = max(0, habit.get("streak", 0) - 1)
                 habit["last_done"] = yesterday if habit["streak"] > 0 else None
             break
+    update_history()
     save_data()    
 
 
