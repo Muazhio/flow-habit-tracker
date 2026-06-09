@@ -51,6 +51,9 @@ def save_data():
 HABIT_ICONS = ["💧", "💪", "📚", "🧘", "🌱", "☀️", "🎯", "✍️", "🥗", "😴"]
 HABIT_COLORS = ["#7c5cff", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
 
+# Human-readable names shown in the dropdown (same order as HABIT_COLORS)
+COLOR_NAMES = ["Purple", "Cyan", "Green", "Yellow", "Red", "Lavender"]
+
 
 def load_css():
     st.markdown(
@@ -270,7 +273,12 @@ def load_css():
         }
 
         input, textarea, select {
-            color: var(--text) !important;
+            color: #1a1a1a !important;
+            background-color: rgba(255, 255, 255, .06) !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background: transparent !important;
         }
         </style>
         """,
@@ -296,6 +304,10 @@ def seed_habits():
 
 
 def init_state():
+    # This keeps track of which habit is being edited (None means no edit open)
+    if "editing_id" not in st.session_state:
+        st.session_state.editing_id = None
+
     if "habits" not in st.session_state:
         data = load_data()
         if data:
@@ -353,7 +365,18 @@ def add_habit(name, icon, color):
         }
     )
     st.session_state.next_id += 1
-    save_data()       
+    save_data()
+
+
+def edit_habit(habit_id, new_name, new_icon, new_color):
+    """Find the habit by its id and update the name, icon, and color."""
+    for habit in st.session_state.habits:
+        if habit["id"] == habit_id:
+            habit["name"] = new_name.strip()
+            habit["icon"] = new_icon
+            habit["color"] = new_color
+            break
+    save_data()
 
 
 def toggle_habit(habit_id):
@@ -376,14 +399,14 @@ def toggle_habit(habit_id):
                 habit["last_done"] = yesterday if habit["streak"] > 0 else None
             break
     update_history()
-    save_data()    
+    save_data()
 
 
 def delete_habit(habit_id):
     st.session_state.habits = [
         habit for habit in st.session_state.habits if habit["id"] != habit_id
     ]
-    save_data()        
+    save_data()
 
 
 def render_sidebar():
@@ -418,6 +441,9 @@ def render_metric(label, value):
 
 
 def render_habit_row(habit, show_delete=False):
+    # Check if this habit is currently being edited
+    is_editing = (st.session_state.editing_id == habit["id"])
+
     state_class = "complete" if habit["done"] else ""
     state_text = "Complete" if habit["done"] else "Waiting for today"
     streak = habit.get("streak", 0)
@@ -446,11 +472,73 @@ def render_habit_row(habit, show_delete=False):
         if st.button(label, key=f"toggle_{habit['id']}", use_container_width=True):
             toggle_habit(habit["id"])
             st.rerun()
-        if show_delete and st.button(
-            "Delete", key=f"delete_{habit['id']}", use_container_width=True
-        ):
-            delete_habit(habit["id"])
+        if show_delete:
+            # Show Edit and Delete buttons side by side
+            edit_col, delete_col = st.columns(2)
+            with edit_col:
+                if st.button("Edit", key=f"edit_{habit['id']}", use_container_width=True):
+                    # If we click Edit again on the same habit, close the form
+                    if is_editing:
+                        st.session_state.editing_id = None
+                    else:
+                        st.session_state.editing_id = habit["id"]
+                    st.rerun()
+            with delete_col:
+                if st.button("Delete", key=f"delete_{habit['id']}", use_container_width=True):
+                    delete_habit(habit["id"])
+                    st.rerun()
+
+    # If this habit is being edited, show the edit form right below it
+    if is_editing:
+        render_edit_form(habit)
+
+
+def render_edit_form(habit):
+    """Show input fields to edit this habit's name, icon, and color."""
+    with st.form(f"edit_form_{habit['id']}"):
+        st.subheader("Edit habit")
+
+        # Pre-fill the fields with the habit's current values
+        new_name = st.text_input("Habit name", value=habit["name"])
+
+        cols = st.columns(2)
+        with cols[0]:
+            # Find which position the current icon is at in the list
+            if habit["icon"] in HABIT_ICONS:
+                icon_index = HABIT_ICONS.index(habit["icon"])
+            else:
+                icon_index = 0
+            new_icon = st.selectbox("Icon", HABIT_ICONS, index=icon_index)
+
+        with cols[1]:
+            # Find which position the current color is at in the list
+            if habit["color"] in HABIT_COLORS:
+                color_index = HABIT_COLORS.index(habit["color"])
+            else:
+                color_index = 0
+            new_color_name = st.selectbox("Accent color", COLOR_NAMES, index=color_index)
+            new_color = HABIT_COLORS[COLOR_NAMES.index(new_color_name)]
+
+        # Two buttons: Save and Cancel
+        button_cols = st.columns(2)
+        with button_cols[0]:
+            save_clicked = st.form_submit_button("Save", use_container_width=True)
+        with button_cols[1]:
+            cancel_clicked = st.form_submit_button("Cancel", use_container_width=True)
+
+    # Handle the button clicks (this runs after the form closes)
+    if save_clicked:
+        if new_name.strip():
+            edit_habit(habit["id"], new_name, new_icon, new_color)
+            st.session_state.editing_id = None
+            st.success("Habit updated.")
             st.rerun()
+        else:
+            st.warning("Habit name can't be empty.")
+
+    if cancel_clicked:
+        st.session_state.editing_id = None
+        st.rerun()
 
 
 def render_today():
@@ -509,7 +597,8 @@ def render_habits():
         with cols[0]:
             icon = st.selectbox("Icon", HABIT_ICONS)
         with cols[1]:
-            color = st.selectbox("Accent color", HABIT_COLORS)
+            color_name = st.selectbox("Accent color", COLOR_NAMES)
+            color = HABIT_COLORS[COLOR_NAMES.index(color_name)]
         submitted = st.form_submit_button("Add habit", use_container_width=True)
 
     if submitted:
