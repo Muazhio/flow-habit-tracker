@@ -7,6 +7,8 @@ Run with:
 
 import json
 import os
+import hashlib
+import re
 from copy import deepcopy
 from datetime import date, timedelta
 
@@ -26,11 +28,62 @@ st.set_page_config(
 
 DATA_FILE = "flow_data.json"
 
+# LOGIN: User accounts are saved in this JSON file.
+USERS_FILE = "users.json"
+
+
+# LOGIN: Create a password hash so passwords are not saved as plain text.
+def hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+# LOGIN: Keep usernames safe for making a per-user data filename.
+def safe_username(username):
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", username.strip().lower())
+
+
+# LOGIN: Each user gets their own habit data JSON file.
+def get_data_file():
+    username = st.session_state.get("username")
+    if username:
+        return f"flow_data_{safe_username(username)}.json"
+    return DATA_FILE
+
+
+# LOGIN: Read saved users, or create a default test user if the file does not exist.
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        users = {
+            "test": {
+                "password_hash": hash_password("test"),
+            }
+        }
+        save_users(users)
+        return users
+
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
+        users = json.load(f)
+
+    if "test" not in users:
+        users["test"] = {
+            "password_hash": hash_password("test"),
+        }
+        save_users(users)
+
+    return users
+
+
+# LOGIN: Save the user account list back to JSON.
+def save_users(users):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=2)
+
 
 def load_data():
     """Read saved data from the file, or return None if nothing is saved yet."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+    data_file = get_data_file()
+    if os.path.exists(data_file):
+        with open(data_file, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
 
@@ -44,7 +97,7 @@ def save_data():
         "last_active": date.today().isoformat(),
         "history": st.session_state.history,
     }
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    with open(get_data_file(), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -273,7 +326,7 @@ def load_css():
         }
 
         input, textarea, select {
-            color: #1a1a1a !important;
+            color: #ffffff !important;
             background-color: rgba(255, 255, 255, .06) !important;
         }
 
@@ -301,6 +354,83 @@ def seed_habits():
             }
         )
     return habits
+
+
+# LOGIN: Set default login session values when the app starts.
+def init_auth():
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if "username" not in st.session_state:
+        st.session_state.username = None
+
+
+# LOGIN: Check whether the username and password match an account from users.json.
+def login_user(username, password):
+    users = load_users()
+    username = safe_username(username)
+
+    if username in users and users[username]["password_hash"] == hash_password(password):
+        st.session_state.logged_in = True
+        st.session_state.username = username
+        return True
+
+    return False
+
+
+# LOGIN: Create a new account and save it in users.json.
+def register_user(username, password):
+    users = load_users()
+    username = safe_username(username)
+
+    if not username:
+        return False, "Choose a username."
+    if not password:
+        return False, "Choose a password."
+    if username in users:
+        return False, "That username already exists. Please log in instead."
+
+    users[username] = {
+        "password_hash": hash_password(password),
+    }
+    save_users(users)
+    return True, "Account created. You can log in now."
+
+
+# LOGIN: Show login and register forms before the habit tracker is visible.
+def render_login_page():
+    st.markdown('<div class="greeting">Welcome to Flow.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="date-line">Log in or create an account to track your habits.</div>',
+        unsafe_allow_html=True,
+    )
+
+    login_tab, register_tab = st.tabs(["Login", "Register"])
+
+    with login_tab:
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Login", use_container_width=True)
+
+        if submitted:
+            if login_user(username, password):
+                st.success("Logged in.")
+                st.rerun()
+            else:
+                st.error("Username or password is wrong.")
+
+    with register_tab:
+        with st.form("register_form"):
+            new_username = st.text_input("New username")
+            new_password = st.text_input("New password", type="password")
+            registered = st.form_submit_button("Create account", use_container_width=True)
+
+        if registered:
+            ok, message = register_user(new_username, new_password)
+            if ok:
+                st.success(message)
+            else:
+                st.warning(message)
 
 
 def init_state():
@@ -424,7 +554,17 @@ def render_sidebar():
         ["Today", "Habits", "Stats"],
         label_visibility="collapsed",
     )
-    st.sidebar.caption("Saved in this Streamlit session")
+    st.sidebar.caption("Saved for this user")
+
+    # LOGIN: Show the current user and let them log out.
+    st.sidebar.caption(f"Logged in as {st.session_state.username}")
+    if st.sidebar.button("Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        for key in ["habits", "next_id", "note", "history", "editing_id"]:
+            st.session_state.pop(key, None)
+        st.rerun()
+
     return page
 
 
@@ -648,6 +788,12 @@ def render_stats():
 
 def main():
     load_css()
+    # LOGIN: Stop here until the user is logged in.
+    init_auth()
+    if not st.session_state.logged_in:
+        render_login_page()
+        return
+
     init_state()
     page = render_sidebar()
 
