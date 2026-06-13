@@ -134,11 +134,3 @@ flow-habit-tracker/
 - Streamlit session state is used to keep track of login state, current habits, editing mode, notes, and page interactions.
 - This project is intended as an introductory programming project, so the code favors readability over complex architecture.
 
-## Possible Future Improvements
-
-- Add a `requirements.txt` file
-- Add charts for habit history
-- Improve password security with salted password hashing
-- Add automated tests
-- Add cloud or database storage
-- Add a reset-password flow
