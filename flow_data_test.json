@@ -1,0 +1,44 @@
+{
+  "habits": [
+    {
+      "id": 1,
+      "name": "Drink water",
+      "icon": "\ud83d\udca7",
+      "done": false,
+      "color": "#7c5cff",
+      "streak": 0,
+      "last_done": null
+    },
+    {
+      "id": 2,
+      "name": "Exercise",
+      "icon": "\ud83d\udcaa",
+      "done": true,
+      "color": "#22d3ee",
+      "streak": 0,
+      "last_done": null
+    },
+    {
+      "id": 3,
+      "name": "Read 10 pages",
+      "icon": "\ud83d\udcda",
+      "done": false,
+      "color": "#34d399",
+      "streak": 0,
+      "last_done": null
+    },
+    {
+      "id": 4,
+      "name": "Meditate",
+      "icon": "\ud83e\uddd8",
+      "done": false,
+      "color": "#fbbf24",
+      "streak": 0,
+      "last_done": null
+    }
+  ],
+  "next_id": 5,
+  "note": "",
+  "last_active": "2026-06-13",
+  "history": {}
+}
